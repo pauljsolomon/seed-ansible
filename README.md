@@ -19,7 +19,7 @@ ansible-playbook site-rundeck.yml -e @vars.yml   # etc.
 * Most things are in one file (`site.yml`), but I've split out some of the service setups into `site-<SERVICE>.yml`.  These depend on a properly-setup hosts file, as well as `group_vars` proxy setup
 * For the security groups, all other services get associated with the zabbix_sg.  I created a separate sg for the app node
 * Set up proxy config for accessing hosts in private subnets (via the bastion app node), in `group\_vars/*.yml`
-** e.g.:  `ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/psolomon_free.pem -W %h:%p -q ubuntu@34.227.71.49"'`±±±
+  * e.g.:  `ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/psolomon_free.pem -W %h:%p -q ubuntu@34.227.71.49"'`±±±
 
 # Could not get to work/didn't finish
 
