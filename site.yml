@@ -1,0 +1,515 @@
+---
+
+# To run:  ansible-playbook site.yml -e @vars.yml
+#
+# Based on: http://jeremievallee.com/2016/07/27/aws-vpc-ansible/
+
+- name: Create Nodes
+  hosts:        localhost
+  gather_facts: False
+
+################################################################################
+
+  tasks:
+    - name: Creates directory for SSH config
+      file:
+        path:    /Users/psolomon/ansible/group_vars
+        state:   directory
+        mode:    0775
+      register: my_create_dir_cmd
+
+    - debug:
+        var: my_create_dir_cmd
+
+    - name: Create a new hosts file
+      copy:
+        dest:  "/Users/psolomon/ansible/hosts"
+        force: yes
+        content: |
+          [local]
+          localhost ansible_python_interpreter=/usr/local/bin/python
+           
+      register: my_hosts_cmd
+
+    - debug:
+        var: my_hosts_cmd
+
+################################################################################
+
+    - name: Create VPC
+      ec2_vpc_net:
+        name:       "psolomon_vpc"
+        cidr_block: "{{ vpc_cidr }}"
+        region:     "{{ aws_region }}"
+        state:      "present"
+      register: my_vpc
+
+    - name: Set VPC ID in variable
+      set_fact:
+        vpc_id: "{{ my_vpc.vpc.id }}"
+    - debug:
+        var: my_vpc
+    - debug:
+        var: vpc_id
+
+################################################################################
+
+    - name: Create Public Subnet
+      ec2_vpc_subnet:
+        state:     "present"
+        vpc_id:    "{{ vpc_id }}"
+        cidr:      "{{ public_subnet_cidr }}"
+        az:        "{{ aws_region }}a"
+        region:    "{{ aws_region }}"
+        resource_tags:
+          Name: "psolomon_public_subnet"
+      register: public_subnet
+
+    - name: Set Public Subnet ID in variable
+      set_fact:
+        public_subnet_id: "{{ public_subnet.subnet.id }}"
+    - debug:
+        var: public_subnet
+    - debug:
+        var: public_subnet_id
+
+################################################################################
+
+    - name: Create Private Subnet
+      ec2_vpc_subnet:
+        state:        "present"
+        vpc_id:       "{{ vpc_id }}"
+        cidr:         "{{ private_subnet_cidr }}"
+        #az:           "{{ aws_region }}a"
+        region:       "{{ aws_region }}"
+        resource_tags:
+          Name: "psolonon_private_subnet"
+      register: private_subnet
+
+    - name: Set Private Subnet ID in variable
+      set_fact:
+        private_subnet_id: "{{ private_subnet.subnet.id }}"
+    - debug:
+        var: private_subnet
+    - debug:
+        var: private_subnet_id
+
+################################################################################
+
+    - name: Create Internet Gateway for VPC
+      ec2_vpc_igw:
+        vpc_id:    "{{ vpc_id }}"
+        region:    "{{ aws_region }}"
+        state:     "present"
+        tags:
+          Name: "psolomon_igw"
+      register: my_vpc_igw
+
+    - name: Set Internet Gateway ID in variable
+      set_fact:
+        igw_id:  "{{ my_vpc_igw.gateway_id }}"
+    - debug:
+        var: my_vpc_igw
+    - debug:
+        var: igw_id
+
+################################################################################
+
+    - name: Set up public subnet route table
+      ec2_vpc_route_table:
+        vpc_id:    "{{ vpc_id }}"
+        region:    "{{ aws_region }}"
+        tags:
+          Name: "psolomon_public_route_table"
+        subnets:
+          - "{{ public_subnet_id }}"
+        routes:
+          - dest:        "0.0.0.0/0"
+            gateway_id:  "{{ igw_id }}"
+      register: my_route_table
+
+    - name: Set route table id in variable
+      set_fact:
+        route_table_id:  "{{ my_vpc_igw.gateway_id }}"
+    - debug:
+        var: my_route_table
+    - debug:
+        var: route_table_id
+
+################################################################################
+
+    - name: Create App Security Group
+      ec2_group:
+        name:             app_sg
+        description:      "App Security Group"
+        vpc_id:           "{{ vpc_id }}"
+        region:           "{{ aws_region }}"
+        rules:
+          - proto:        "tcp"
+            from_port:    "22"
+            to_port:      "22"
+            cidr_ip:      "0.0.0.0/0"
+          - proto:        "tcp"
+            from_port:    "{{ app_server_port }}"
+            to_port:      "{{ app_server_port }}"
+            cidr_ip:      "0.0.0.0/0"
+      register: my_app_security_group
+
+    - debug:
+        var: my_app_security_group
+
+################################################################################
+
+    - name: Create Postgres Security Group
+      ec2_group:
+        name:             postgres_sg
+        description:      "Postgres Security Group"
+        vpc_id:           "{{ vpc_id }}"
+        region:           "{{ aws_region }}"
+        rules:
+          - proto:        "tcp"
+            from_port:    "22"
+            to_port:      "22"
+            cidr_ip:      "{{ public_subnet_cidr }}"
+          - proto:        "tcp"
+            from_port:    "5432"
+            to_port:      "5432"
+            cidr_ip:      "{{ public_subnet_cidr }}"
+      register: my_postgres_security_group
+
+    - debug:
+        var: my_postgres_security_group
+
+################################################################################
+
+    - name: Create new nat gateway for the postgres node for outbound traffic
+      ec2_vpc_nat_gateway:
+        state:                  present
+        subnet_id:              "{{ public_subnet_id }}"
+        region:                 "{{ aws_region }}"
+        wait:                   true
+        if_exist_do_not_create: true
+      register: my_postgres_nat_gateway
+
+    - name: Set nat gateway id in variable
+      set_fact:
+        nat_gateway_id:  "{{ my_postgres_nat_gateway.nat_gateway_id }}"
+    - debug:
+        var: my_postgres_nat_gateway
+    - debug:
+        var: nat_gateway_id
+
+################################################################################
+
+    - name: Create route table for private subnets
+      ec2_vpc_route_table:
+        vpc_id: "{{ vpc_id }}"
+        region: "{{ aws_region }}"
+        tags:
+          Name: "psolomon_private_route_table"
+        subnets:
+          - "{{ private_subnet_id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ nat_gateway_id }}"
+      register: my_private_route_table
+
+    - debug:
+        var: my_private_route_table
+
+################################################################################
+
+    - name: Create Zabbix Security Group
+      ec2_group:
+        name:             zabbix_sg
+        description:      "Zabbix Security Group"
+        vpc_id:           "{{ vpc_id }}"
+        region:           "{{ aws_region }}"
+        rules:
+          - proto:        "tcp"
+            from_port:    "22"
+            to_port:      "22"
+            cidr_ip:      "{{ public_subnet_cidr }}"
+          - proto:        "tcp"
+            from_port:    "{{ app_server_port }}"
+            to_port:      "{{ app_server_port }}"
+            cidr_ip:      "0.0.0.0/0"
+      register: my_zabbix_security_group
+
+    - debug:
+        var: my_zabbix_security_group
+
+################################################################################
+
+    - name: Create an app ec2 instance
+      ec2:
+         region:            "{{ aws_region }}"
+         key_name:          "{{ aws_keypair }}"
+         group:             "app_sg"
+         instance_type:     "{{ app_instance_type }}"
+         image:             "{{ app_ami }}"
+         wait:              true
+         count:             1  # default
+         vpc_subnet_id:     "{{ public_subnet_id }}"
+         assign_public_ip:  yes
+         user_data: |
+                    #!/bin/bash
+                    apt-get update
+                    apt-get install -y python
+                    echo "Hello, World" > index.html
+                    nohup busybox httpd -f -p "{{ app_server_port }}" &
+         count_tag:
+            Name: app
+         instance_tags:
+            Name: app
+      register: my_app_ec2
+
+    - debug:
+        var: my_app_ec2
+
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="[webserver]"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="{{ item.public_ip }}"
+      with_items: "{{ my_app_ec2.instances }}"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line=" "
+
+    - name: Wait for App node(s) SSH to come up
+      local_action: wait_for 
+                    host={{ item.public_ip }} 
+                    port=22 
+                    state=started
+      with_items: "{{ my_app_ec2.instances }}"
+
+################################################################################
+
+    - name: Create an Postgres ec2 instance
+      ec2:
+         region:            "{{ aws_region }}"
+         key_name:          "{{ aws_keypair }}"
+         group:             "postgres_sg"
+         instance_type:     "{{ postgres_instance_type }}"
+         image:             "{{ postgres_ami }}"
+         wait:              true
+         count:             1  # default
+         vpc_subnet_id:     "{{ private_subnet_id }}"
+         assign_public_ip:  no
+         user_data: |
+                    #!/bin/bash
+                    apt-get update
+                    apt-get install -y python
+         count_tag:
+            Name: postgres
+         instance_tags:
+            Name: postgres
+      register: my_postgres_ec2
+
+    - debug:
+        var: my_postgres_ec2
+
+    - name: Set up SSH for bastion server, the app server for this example
+      copy:
+        dest:  "/Users/psolomon/ansible/group_vars/postgres-server.yml"
+        force: yes
+        content: |
+          ---
+          ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/{{ aws_keypair_file }} -W %h:%p -q ubuntu@{{ my_app_ec2.instances[0].public_ip }}"'
+
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="[postgres-server]"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="{{ item.private_ip }}"
+      with_items: "{{ my_postgres_ec2.instances }}"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="\n"
+
+# FIXME: GET TO WORK VIA BASTION HOST
+#    - name: Wait for Postgres nodes SSH to come up
+#      local_action: wait_for 
+#                    host={{ item.private_ip }} 
+#                    port=22 
+#                    state=started
+#      with_items: "{{ my_postgres_ec2.instances }}"
+
+################################################################################
+
+    - name: Create a Zabbix ec2 instance
+      ec2:
+         region:            "{{ aws_region }}"
+         key_name:          "{{ aws_keypair }}"
+         group:             "zabbix_sg"
+         instance_type:     "{{ zabbix_instance_type }}"
+         image:             "{{ zabbix_ami }}"
+         wait:              true
+         count:             1  # default
+         vpc_subnet_id:     "{{ private_subnet_id }}"
+         assign_public_ip:  no
+         user_data: |
+                    #!/bin/bash
+                    apt-get update
+                    apt-get install -y python
+         count_tag:
+            Name: zabbix
+         instance_tags:
+            Name: zabbix
+      register: my_zabbix_ec2
+
+    - debug:
+        var: my_zabbix_ec2
+
+    - name: Set up SSH for bastion server, the app server for this example
+      copy:
+        dest:  "/Users/psolomon/ansible/group_vars/zabbix-server.yml"
+        force: yes
+        content: |
+          ---
+          ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/{{ aws_keypair_file }} -W %h:%p -q ubuntu@{{ my_app_ec2.instances[0].public_ip }}"'
+
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="[zabbix-server]"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="{{ item.private_ip }}"
+      with_items: "{{ my_zabbix_ec2.instances }}"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="\n"
+
+# FIXME: GET TO WORK VIA BASTION HOST
+#    - name: "Wait for Zabbix node(s) SSH to come up"
+#      local_action: wait_for 
+#                    host={{ item.private_ip }} 
+#                    port=22 
+#                    state=started
+#      with_items: "{{ my_zabbix_ec2.instances }}"
+
+################################################################################
+
+    - name: Create a Rundeck ec2 instance
+      ec2:
+         region:            "{{ aws_region }}"
+         key_name:          "{{ aws_keypair }}"
+         group:             "zabbix_sg"
+         instance_type:     "{{ rundeck_instance_type }}"
+         image:             "{{ rundeck_ami }}"
+         wait:              true
+         count:             1  # default
+         vpc_subnet_id:     "{{ private_subnet_id }}"
+         assign_public_ip:  no
+         user_data: |
+                    #!/bin/bash
+                    apt-get update
+                    apt-get install -y python
+         count_tag:
+            Name: rundeck
+         instance_tags:
+            Name: rundeck
+      register: my_rundeck_ec2
+
+    - debug:
+        var: my_rundeck_ec2
+
+    - name: Set up SSH for bastion server, the app server for this example
+      copy:
+        dest:  "/Users/psolomon/ansible/group_vars/rundeck-server.yml"
+        force: yes
+        content: |
+          ---
+          ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/{{ aws_keypair_file }} -W %h:%p -q ubuntu@{{ my_app_ec2.instances[0].public_ip }}"'
+
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="[rundeck-server]"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="{{ item.private_ip }}"
+      with_items: "{{ my_rundeck_ec2.instances }}"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="\n"
+
+# FIXME: GET TO WORK VIA BASTION HOST
+#    - name: "Wait for Rundeck node(s) SSH to come up"
+#      local_action: wait_for 
+#                    host={{ item.private_ip }} 
+#                    port=22 
+#                    state=started
+#      with_items: "{{ my_rundeck_ec2.instances }}"
+
+################################################################################
+
+    - name: Create a Graylog ec2 instance
+      ec2:
+         region:            "{{ aws_region }}"
+         key_name:          "{{ aws_keypair }}"
+         group:             "zabbix_sg"
+         instance_type:     "{{ graylog_instance_type }}"
+         image:             "{{ graylog_ami }}"
+         wait:              true
+         count:             1  # default
+         vpc_subnet_id:     "{{ private_subnet_id }}"
+         assign_public_ip:  no
+         user_data: |
+                    #!/bin/bash
+                    apt-get update
+                    apt-get install -y python
+         count_tag:
+            Name: graylog
+         instance_tags:
+            Name: graylog
+      register: my_graylog_ec2
+
+    - debug:
+        var: my_graylog_ec2
+
+    - name: Set up SSH for bastion server, the app server for this example
+      copy:
+        dest:  "/Users/psolomon/ansible/group_vars/graylog-server.yml"
+        force: yes
+        content: |
+          ---
+          ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/{{ aws_keypair_file }} -W %h:%p -q ubuntu@{{ my_app_ec2.instances[0].public_ip }}"'
+
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="[graylog-server]"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="{{ item.private_ip }}"
+      with_items: "{{ my_graylog_ec2.instances }}"
+    - name: "Add the newly created EC2 instance(s) to the local host group"
+      local_action: lineinfile 
+                    path="./hosts" 
+                    line="\n"
+
+# FIXME: GET TO WORK VIA BASTION HOST
+#    - name: "Wait for Graylog node(s) SSH to come up"
+#      local_action: wait_for 
+#                    host={{ item.private_ip }} 
+#                    port=22 
+#                    state=started
+#      with_items: "{{ my_graylog_ec2.instances }}"
+
+################################################################################

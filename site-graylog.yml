@@ -1,0 +1,23 @@
+---
+
+# To run:  ansible-playbook site-graylog.yml
+#
+# https://www.calazan.com/ansible-playbook-for-provisioning-a-graylog-central-logging-server/
+#
+# FIXME:psolomon HAVEN'T STARTED THIS YET
+
+- name: Provision a Graylog server
+  hosts:       graylog-server
+  become:      yes
+  become_user: root
+  remote_user: ubuntu
+  vars:
+    - update_apt_cache: yes
+
+  roles:
+    - base
+    - certbot
+    - graylog
+    - nginx
+    - ufw
+

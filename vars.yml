@@ -1,0 +1,32 @@
+---
+app_ami:                 ami-43a15f3e    # Ubuntu 16.04 LTS
+app_instance_type:       t2.nano
+
+postgres_ami:            ami-43a15f3e    # Ubuntu 16.04 LTS
+postgres_instance_type:  t2.nano
+
+zabbix_ami:              ami-43a15f3e    # Ubuntu 16.04 LTS
+zabbix_instance_type:    t2.micro        # 2G RAM, probably not enough
+
+rundeck_ami:             ami-43a15f3e    # Ubuntu 16.04 LTS
+rundeck_instance_type:   t2.micro        # 2G RAM, probably not enough
+
+graylog_ami:             ami-43a15f3e    # Ubuntu 16.04 LTS
+graylog_instance_type:   t2.micro
+
+aws_keypair:             "{{ lookup('env','AWS_KEYPAIR') | default('psolomon_free', true) }}"
+aws_keypair_file:        "{{ lookup('env','AWS_KEYPAIR') | default('psolomon_free', true) }}.pem"
+app_server_port:         8080
+
+# AWS Credentials
+# we are using the standard AWS environment variables instead
+#aws_access_key:          "THISISMYAWSACCESSKEY"
+#aws_secret_key:          "ThisIsMyAwSSecretKey"
+aws_region:              us-east-1
+
+# VPC Information
+vpc_cidr:                "10.0.0.0/16"
+
+# Subnets
+public_subnet_cidr:      "10.0.0.0/24"
+private_subnet_cidr:     "10.0.1.0/24"

@@ -1,0 +1,54 @@
+---
+
+# To run:  ansible-playbook site-postgres.yml
+
+- name: Install Postgres
+  hosts:        postgres-server
+  gather_facts: False
+  remote_user:  ubuntu
+  become:       yes
+  become_user:  root
+
+################################################################################
+
+  tasks:
+    - name: ensure apt cache is up to date
+      apt:          update_cache=yes
+      register:     update_cache_cmd
+
+    - debug:
+        var: update_cache_cmd
+
+    - name: ensure packages are installed
+      apt:          name={{item}}
+      with_items:
+          - postgresql
+          - libpq-dev
+          - python-psycopg2
+      register:     apt_get_install_cmd
+
+    - debug:
+        var: apt_get_install_cmd
+
+    - name: Create an Postgres db
+      postgresql_user:
+        name:            postgres
+        db:              postgres
+        password:        postgres
+        role_attr_flags: CREATEDB,CREATEROLE,SUPERUSER
+      register:     postgres_install_cmd
+
+    - debug:
+        var: postgres_install_cmd
+
+    - name: Create an Postgres db
+      postgresql_db:
+        name:     app_db
+        encoding: UTF-8
+      become_user:  postgres
+      register:     postgres_install_cmd
+
+    - debug:
+        var: postgres_install_cmd
+
+################################################################################

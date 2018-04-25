@@ -1,0 +1,114 @@
+---
+
+# To run:  ansible-playbook site-rundeck.yml
+#
+# https://gist.github.com/xarsh/af02a131571a01b3005747bb4cfb23f5
+
+- name: Install Rundeck
+  hosts:        rundeck-server
+  gather_facts: False
+  remote_user:  ubuntu
+  become:       yes
+  become_user:  root
+
+################################################################################
+
+  tasks:
+    - name: add openjdk 8 to apt
+      apt_repository: repo=ppa:openjdk-r/ppa
+      register:       apt_get_openjdk8_cmd
+
+    - debug:
+        var: apt_get_openjdk8_cmd
+
+################################################################################
+
+    - name: ensure apt cache is up to date
+      apt:          update_cache=yes
+      register:     update_cache_cmd
+
+    - debug:
+        var: update_cache_cmd
+
+    - name: ensure packages are installed
+      apt:          name={{item}}
+      with_items:
+          - openjdk-8-jdk
+      register:     apt_get_install_cmd
+
+    - debug:
+        var: apt_get_install_cmd
+
+################################################################################
+
+    - name: java version
+      command:      "java -version"
+      register:       java_version_cmd
+
+    - debug:
+        var: java_version_cmd
+
+################################################################################
+
+    - name: Get Rundeck Package
+      get_url:
+        url:   http://dl.bintray.com/rundeck/rundeck-deb/rundeck-2.6.6-1-GA.deb
+        dest:  /tmp/rundeck-2.6.6-1-GA.deb
+      register:     rundeck_get_url_cmd
+
+    - debug:
+        var: rundeck_get_url_cmd
+
+    - name: Install Rundeck
+      command:      dpkg -i /tmp/rundeck-2.6.6-1-GA.deb
+      register:     install_rundeck_cmd
+
+    - debug:
+        var: install_rundeck_cmd
+
+################################################################################
+
+    - name: configure rundeck
+      lineinfile:
+        dest:       /etc/rundeck/rundeck-config.properties
+        state:      present
+        backrefs:   yes
+        regexp:     localhost:4440
+        #line:       'grails.serverURL=http://{{ ansible_default_ipv4.address }}:4440'
+        line:       'grails.serverURL=http://{{ inventory_hostname }}:4440'
+      register:     configure_rundeck_cmd
+
+    - debug:
+        var: configure_rundeck_cmd
+
+    # $ md5 -s admin
+    # MD5 ("admin") = 21232f297a57a5a743894a0e4a801fc3
+    - name: set rundeck admin user password
+      lineinfile:
+        dest: /etc/rundeck/realm.properties
+        state: present
+        backrefs: yes
+        regexp: admin:admin
+        line: 'admin:MD5:21232f297a57a5a743894a0e4a801fc3,user,admin,architect,deploy,build'
+      register:     set_rundeck_admin_password_cmd
+
+    - debug:
+        var: set_rundeck_admin_password_cmd
+
+################################################################################
+
+    - name: restart rundeck
+      command:      "/etc/init.d/rundeckd restart"
+      register:       restart_rundeck_cmd
+
+    - debug:
+        var: restart_rundeck_cmd
+
+    - name: rundeck status
+      command:      "/etc/init.d/rundeckd status"
+      register:       rundeck_status_cmd
+
+    - debug:
+        var: rundeck_status_cmd
+
+################################################################################

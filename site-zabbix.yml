@@ -1,0 +1,31 @@
+---
+
+# To run:  ansible-playbook site-postgres.yml
+
+- name: Install Zabbix
+  hosts:        zabbix-server
+  gather_facts: False
+  remote_user:  ubuntu
+  become:       yes
+  become_user:  root
+
+################################################################################
+
+  tasks:
+    - name: ensure apt cache is up to date
+      apt:          update_cache=yes
+      register:     update_cache_cmd
+
+    - debug:
+        var: update_cache_cmd
+
+    - name: ensure packages are installed
+      apt:          name={{item}}
+      register:     apt_get_install_cmd
+      with_items:
+          - zabbix-server-pgsql
+
+    - debug:
+        var: apt_get_install_cmd
+
+################################################################################
