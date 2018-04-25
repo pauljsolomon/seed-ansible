@@ -2,9 +2,10 @@
 
   * For unit/functional tests, I would use a Travis CI, Circle CI, or a Jenkins serve to test
     * syntax checking of all playbooks, using `--syntax-check`
-    * ansible_review:  https://github.com/willthames/ansible-review
+    * I would look at ansible_review to go above and beyond `--syntax-check`:  https://github.com/willthames/ansible-review
+    * Once unit/functional tests were run, I would hand off to Jenkins (or similar) to run integration tests (below).
 
-  * For integration/sandbox testing, I would use a combination of test-kitchen, docker, and serverspec to test actual running instances.  Examples of these tests would be:
+  * For integration/sandbox testing, I would use a combination of test-kitchen, docker, and serverspec to test actual running instances.  These would likely be run outside of Travis/Circle/etc., probably in a Jenkins instance. Examples of these tests would be:
     * I would probably look at ansible_spec:  https://github.com/volanja/ansible_spec 
     * I would also look at the kitchen plugin for ansible:  https://github.com/neillturner/kitchen-ansible
     * Tests like the following would be created for these ansible-created nodes:
