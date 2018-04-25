@@ -5,8 +5,6 @@
 
 1. How do you verify which kernel modules are currently loaded in the system?
 
-* lsmod
-
 ```
 $ lsmod
 Module                  Size  Used by
