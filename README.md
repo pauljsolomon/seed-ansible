@@ -43,6 +43,6 @@ ansible-playbook site-rundeck.yml -e @vars.yml   # etc.
 
 # Cool Things
 
-* access to commands via bastion host (app server for this example)
-** `ansible graylog-server -i ./hosts -a "uname -a" -u ubuntu`
+* Access to commands via bastion host (app server for this example)
+** `ansible postgres-server -i ./hosts -a "pg_lsclusters`
 
