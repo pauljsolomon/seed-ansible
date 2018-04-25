@@ -19,6 +19,9 @@
   * If I used Jenkins or a similar system, I would create webhooks to run these tests after a merge/PR/release event in git.
 
 * Describe how you would maintain changes to Zabbix monitors and Rundeck jobs inside Ansible.
+  * While I didn't get any experience with actually running these services (I set them up, but didnt' complete the configuration), I would maintain separate playbooks for each service (monitors and jobs) and each environment (prod vs. staging)
+  * I would probably tag each release in git
+  * This would assume I have an up-to-date `hosts` file, possibly checked in to git.  
 
 * Describe how you secure your networks.
   * create all services on private subnets
@@ -42,7 +45,7 @@
   * e.g.:  `ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/psolomon_free.pem -W %h:%p -q ubuntu@34.227.71.49"'`
 
 * Could not get to work/didn't finish
-  * Graylog setup
+  * Graylog setup was not completed.  Saved a playbook with roles for this in the repo but never got to it.
   * Didn't adjust AWS instance types to match servers (basically used `t2.nano` for all node types)
   * Did not finish full configurion of all services, but generally got the node up with basic service installed
   * Postgres hba/etc. setup
@@ -51,6 +54,9 @@
   * Using a bastion host with the wait_for doesn't seem to be directly supported (e.g. wait for nodes in private subnets to come up)
 
 * Next Steps / Improvements
+  * Figure out the best way to remove things (`available: false`)
+  * Write tooling to update the hosts file based on the current environment, possibly check it in
+  * Figure out how to maintain ansible with multiple users (similar to how `terragrunt` locks and manages a state file)
   * Optimize AWS instance types for each service
   * Create launch configs and autoscaling groups
   * Attach ELB to ASG
