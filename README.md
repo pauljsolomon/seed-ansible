@@ -23,6 +23,7 @@ ansible-playbook site-rundeck.yml -e @vars.yml   # etc.
 # Could not get to work/didn't finish
 
 * graylog setup
+* Didn't adjust node types to match servers (basically used `t2.nano` for all node types)
 * did not finish full configurion of all services, but generally got the node up with basic service installed
 * postgres hba/etc. setup
 * rundeck UI
